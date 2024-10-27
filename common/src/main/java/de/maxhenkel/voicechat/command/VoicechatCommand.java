@@ -115,7 +115,7 @@ public class VoicechatCommand extends CommandBase {
                     if (attempts <= 1) {
                         commandSender.sendMessage(new TextComponentTranslation("message.voicechat.ping_received", new TextComponentString(String.valueOf(pingMilliseconds))));
                     } else {
-                        commandSender.sendMessage(new TextComponentTranslation("message.voicechat.ping_received_attempt", new TextComponentString(String.valueOf(attempts)), new TextComponentString(String.valueOf(pingMilliseconds))));
+                        commandSender.sendMessage(new TextComponentTranslation("message.voicechat.ping_received_attempt", new TextComponentString(String.valueOf(pingMilliseconds)), new TextComponentString(String.valueOf(attempts))));
                     }
                 }
 
