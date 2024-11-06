@@ -8,7 +8,6 @@ public abstract class ListScreenListBase<T extends ListScreenEntryBase<T>> exten
 
     public ListScreenListBase(int width, int height, int top, int itemSize) {
         super(Minecraft.getInstance(), width, height, top, itemSize);
-        setRenderHeader(false, 0);
     }
 
     @Override

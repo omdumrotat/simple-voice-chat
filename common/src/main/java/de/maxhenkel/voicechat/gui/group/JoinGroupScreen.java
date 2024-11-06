@@ -81,24 +81,4 @@ public class JoinGroupScreen extends ListScreenBase {
         }
     }
 
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (super.mouseClicked(mouseX, mouseY, button)) {
-            return true;
-        }
-        for (JoinGroupEntry entry : groupList.children()) {
-            if (entry.isMouseOver(mouseX, mouseY)) {
-                ClientGroup group = entry.getGroup().getGroup();
-                minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1F));
-                if (group.hasPassword()) {
-                    minecraft.setScreen(new EnterPasswordScreen(group));
-                } else {
-                    NetManager.sendToServer(new JoinGroupPacket(group.getId(), null));
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-
 }

@@ -1,11 +1,16 @@
 package de.maxhenkel.voicechat.gui.group;
 
+import de.maxhenkel.voicechat.gui.EnterPasswordScreen;
 import de.maxhenkel.voicechat.gui.widgets.ListScreenBase;
 import de.maxhenkel.voicechat.gui.widgets.ListScreenListBase;
+import de.maxhenkel.voicechat.net.JoinGroupPacket;
+import de.maxhenkel.voicechat.net.NetManager;
 import de.maxhenkel.voicechat.voice.client.ClientManager;
 import de.maxhenkel.voicechat.voice.common.ClientGroup;
 import de.maxhenkel.voicechat.voice.common.PlayerState;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.sounds.SoundEvents;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -18,6 +23,22 @@ public class JoinGroupList extends ListScreenListBase<JoinGroupEntry> {
         super(width, height, top, itemSize);
         this.parent = parent;
         updateGroups();
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        JoinGroupEntry entry = getEntryAtPosition(mouseX, mouseY);
+        if (entry == null) {
+            return false;
+        }
+        ClientGroup group = entry.getGroup().getGroup();
+        minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1F));
+        if (group.hasPassword()) {
+            minecraft.setScreen(new EnterPasswordScreen(group));
+        } else {
+            NetManager.sendToServer(new JoinGroupPacket(group.getId(), null));
+        }
+        return true;
     }
 
     private void updateGroups() {
