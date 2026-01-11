@@ -30,6 +30,10 @@ public class SecretPacket implements Packet<SecretPacket> {
     }
 
     public SecretPacket(Player player, Secret secret, int port, ServerConfig serverConfig) {
+        this(player, secret, port, serverConfig, null);
+    }
+
+    public SecretPacket(Player player, Secret secret, int port, ServerConfig serverConfig, String voiceHostOverride) {
         this.secret = secret;
         this.serverPort = port;
         this.playerUUID = player.getUniqueId();
@@ -38,7 +42,8 @@ public class SecretPacket implements Packet<SecretPacket> {
         this.voiceChatDistance = serverConfig.voiceChatDistance.get();
         this.keepAlive = serverConfig.keepAlive.get();
         this.groupsEnabled = serverConfig.groupsEnabled.get();
-        this.voiceHost = PluginManager.instance().getVoiceHost(serverConfig.voiceHost.get());
+        String host = voiceHostOverride != null ? voiceHostOverride : serverConfig.voiceHost.get();
+        this.voiceHost = PluginManager.instance().getVoiceHost(host);
         this.allowRecording = serverConfig.allowRecording.get();
     }
 

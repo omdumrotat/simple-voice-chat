@@ -549,6 +549,10 @@ public class Server extends Thread {
         return playerStateManager;
     }
 
+    public void onPlayerVoicechatConnect(Player player) {
+        playerStateManager.onPlayerVoicechatConnect(player);
+    }
+
     public ServerGroupManager getGroupManager() {
         return groupManager;
     }

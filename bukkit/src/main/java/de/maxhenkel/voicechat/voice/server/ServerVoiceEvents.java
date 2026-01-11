@@ -9,6 +9,7 @@ import de.maxhenkel.voicechat.net.RequestSecretPacket;
 import de.maxhenkel.voicechat.net.SecretPacket;
 import de.maxhenkel.voicechat.plugins.PluginManager;
 import de.maxhenkel.voicechat.voice.common.Secret;
+import de.maxhenkel.voicechat.voice.standalone.StandaloneVoicechatBridge;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -16,6 +17,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+import javax.annotation.Nullable;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,6 +26,8 @@ public class ServerVoiceEvents implements Listener {
 
     private final Map<UUID, Integer> clientCompatibilities;
     private Server server;
+    @Nullable
+    private StandaloneVoicechatBridge standaloneBridge;
 
     public ServerVoiceEvents() {
         clientCompatibilities = new ConcurrentHashMap<>();
@@ -44,6 +48,12 @@ public class ServerVoiceEvents implements Listener {
         server.start();
 
         PluginManager.instance().onServerStarted();
+
+        if (Voicechat.SERVER_CONFIG.standaloneServer.get()) {
+            standaloneBridge = new StandaloneVoicechatBridge();
+            standaloneBridge.start();
+            Voicechat.LOGGER.info("Standalone voice chat bridge enabled");
+        }
     }
 
     public void onRequestSecretPacket(Player player, RequestSecretPacket packet) {
@@ -99,7 +109,30 @@ public class ServerVoiceEvents implements Listener {
             Voicechat.LOGGER.warn("Player already requested secret - ignoring");
             return;
         }
-        NetManager.sendToClient(player, new SecretPacket(player, secret, server.getPort(), Voicechat.SERVER_CONFIG));
+
+        int serverPort = server.getPort();
+        String voiceHostOverride = null;
+        boolean useStandalone = false;
+        if (Voicechat.SERVER_CONFIG.standaloneServer.get()) {
+            String host = Voicechat.SERVER_CONFIG.standaloneHost.get().trim();
+            if (!host.isEmpty()) {
+                serverPort = Voicechat.SERVER_CONFIG.standalonePort.get();
+                voiceHostOverride = host;
+                useStandalone = true;
+            } else {
+                Voicechat.LOGGER.warn("Standalone server is enabled but no host is configured");
+            }
+        }
+
+        NetManager.sendToClient(player, new SecretPacket(player, secret, serverPort, Voicechat.SERVER_CONFIG, voiceHostOverride));
+
+        if (standaloneBridge != null && standaloneBridge.isRunning()) {
+            standaloneBridge.sendSecret(player.getUniqueId(), secret);
+        }
+        if (useStandalone) {
+            server.onPlayerVoicechatConnect(player);
+        }
+
         Voicechat.LOGGER.info("Sent secret to {}", player.getName());
     }
 
@@ -137,6 +170,9 @@ public class ServerVoiceEvents implements Listener {
         }
 
         server.disconnectClient(event.getPlayer().getUniqueId());
+        if (standaloneBridge != null && standaloneBridge.isRunning()) {
+            standaloneBridge.removePlayer(event.getPlayer().getUniqueId());
+        }
         Voicechat.LOGGER.info("Disconnecting client {}", event.getPlayer().getName());
     }
 
@@ -146,6 +182,13 @@ public class ServerVoiceEvents implements Listener {
 
     public void onPlayerShow(PlayerShowEvent event) {
         server.getPlayerStateManager().onPlayerShow(event);
+    }
+
+    public void shutdown() {
+        if (standaloneBridge != null) {
+            standaloneBridge.stop();
+            standaloneBridge = null;
+        }
     }
 
     public Server getServer() {

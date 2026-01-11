@@ -23,6 +23,10 @@ public class ServerConfig {
     public ConfigEntry<Integer> loginTimeout;
     public ConfigEntry<Double> broadcastRange;
     public ConfigEntry<Boolean> allowPings;
+    public final ConfigEntry<Boolean> standaloneServer;
+    public final ConfigEntry<String> standaloneHost;
+    public final ConfigEntry<Integer> standalonePort;
+    public final ConfigEntry<Integer> standaloneUpdateInterval;
 
     public ServerConfig(ConfigBuilder builder) {
         builder.header(String.format("%s server config v%s", BuildConstants.PLUGIN_NAME, Voicechat.INSTANCE.getDescription().getVersion()));
@@ -104,6 +108,25 @@ public class ServerConfig {
         allowPings = builder
                 .booleanEntry("allow_pings", true,
                         "If the voice chat server should reply to external pings"
+                );
+        standaloneServer = builder
+                .booleanEntry("standalone_server", false,
+                        "If a standalone voice chat server should be used for UDP audio handling",
+                        "When enabled, clients will connect to the standalone server instead of this game server",
+                        "This is useful for BungeeCord/Velocity setups without installing the voice chat plugin on the proxy"
+                );
+        standaloneHost = builder
+                .stringEntry("standalone_host", "",
+                        "The host or IP address of the standalone server",
+                        "This is the host that clients will connect to for voice chat"
+                );
+        standalonePort = builder
+                .integerEntry("standalone_port", 24454, 1, 65535,
+                        "The UDP/TCP port of the standalone server"
+                );
+        standaloneUpdateInterval = builder
+                .integerEntry("standalone_update_interval", 100, 10, 60_000,
+                        "How often to send position/state updates to the standalone server (in milliseconds)"
                 );
     }
 

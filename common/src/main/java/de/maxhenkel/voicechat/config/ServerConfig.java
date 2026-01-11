@@ -26,6 +26,10 @@ public class ServerConfig {
     public ConfigEntry<Double> broadcastRange;
     public ConfigEntry<Boolean> allowPings;
     public ConfigEntry<Boolean> useNatives;
+    public ConfigEntry<Boolean> standaloneServer;
+    public ConfigEntry<String> standaloneHost;
+    public ConfigEntry<Integer> standalonePort;
+    public ConfigEntry<Integer> standaloneUpdateInterval;
 
     public ServerConfig(ConfigBuilder builder) {
 
@@ -113,6 +117,25 @@ public class ServerConfig {
                 .booleanEntry("use_natives", true,
                         "If the mod should load native libraries on dedicated servers",
                         "This is mostly relevant for voice chat addons"
+                );
+
+        standaloneServer = builder
+                .booleanEntry("standalone_server", false,
+                        "If a standalone voice chat server should be used for UDP audio handling",
+                        "When enabled, clients will connect to the standalone server instead of this game server"
+                );
+        standaloneHost = builder
+                .stringEntry("standalone_host", "",
+                        "The host or IP address of the standalone server",
+                        "This is the host that clients will connect to"
+                );
+        standalonePort = builder
+                .integerEntry("standalone_port", 24454, 1, 65535,
+                        "The UDP/TCP port of the standalone server"
+                );
+        standaloneUpdateInterval = builder
+                .integerEntry("standalone_update_interval", 100, 10, 60_000,
+                        "How often to send position/state updates to the standalone server (in milliseconds)"
                 );
     }
 

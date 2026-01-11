@@ -56,6 +56,14 @@ public class ByteBufferWrapper {
         buffer.putDouble(d);
     }
 
+    public float readFloat() {
+        return buffer.getFloat();
+    }
+
+    public void writeFloat(float f) {
+        buffer.putFloat(f);
+    }
+
     public UUID readUUID() {
         return new UUID(buffer.getLong(), buffer.getLong());
     }

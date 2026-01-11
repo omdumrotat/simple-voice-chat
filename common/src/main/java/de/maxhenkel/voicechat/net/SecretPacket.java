@@ -9,6 +9,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 
+import javax.annotation.Nullable;
 import java.util.UUID;
 
 public class SecretPacket implements Packet<SecretPacket> {
@@ -31,6 +32,10 @@ public class SecretPacket implements Packet<SecretPacket> {
     }
 
     public SecretPacket(ServerPlayer player, Secret secret, int port, ServerConfig serverConfig) {
+        this(player, secret, port, serverConfig, null);
+    }
+
+    public SecretPacket(ServerPlayer player, Secret secret, int port, ServerConfig serverConfig, @Nullable String voiceHostOverride) {
         this.secret = secret;
         this.serverPort = port;
         this.playerUUID = player.getUUID();
@@ -39,7 +44,11 @@ public class SecretPacket implements Packet<SecretPacket> {
         this.voiceChatDistance = serverConfig.voiceChatDistance.get();
         this.keepAlive = serverConfig.keepAlive.get();
         this.groupsEnabled = serverConfig.groupsEnabled.get();
-        this.voiceHost = PluginManager.instance().getVoiceHost(serverConfig.voiceHost.get());
+        String voiceHostConfig = voiceHostOverride;
+        if (voiceHostConfig == null || voiceHostConfig.isEmpty()) {
+            voiceHostConfig = serverConfig.voiceHost.get();
+        }
+        this.voiceHost = PluginManager.instance().getVoiceHost(voiceHostConfig);
         this.allowRecording = serverConfig.allowRecording.get();
     }
 
