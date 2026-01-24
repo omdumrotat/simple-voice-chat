@@ -58,6 +58,9 @@ public class ClientConfig {
     public ConfigEntry<Boolean> useNatives;
     public ConfigEntry<FreecamMode> freecamMode;
     public ConfigEntry<Boolean> muteOnJoin;
+    public ConfigEntry<Boolean> reconnectOnTimeout;
+    public ConfigEntry<Integer> reconnectAttempts;
+    public ConfigEntry<Integer> reconnectDelayMs;
 
     public ClientConfig(ConfigBuilder builder) {
 
@@ -244,6 +247,18 @@ public class ClientConfig {
         muteOnJoin = builder
                 .booleanEntry("mute_on_join", false,
                         "If enabled, you will be automatically muted when joining a world"
+                );
+        reconnectOnTimeout = builder
+                .booleanEntry("reconnect_on_timeout", true,
+                        "If enabled, the voice chat will automatically attempt to reconnect when the connection times out"
+                );
+        reconnectAttempts = builder
+                .integerEntry("reconnect_attempts", 5, 1, 20,
+                        "The maximum number of reconnect attempts before giving up"
+                );
+        reconnectDelayMs = builder
+                .integerEntry("reconnect_delay_ms", 2000, 500, 10000,
+                        "The delay in milliseconds between reconnect attempts"
                 );
     }
 

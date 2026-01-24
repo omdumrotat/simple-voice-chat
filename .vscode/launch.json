@@ -13,7 +13,7 @@
       "mainClass": "net.neoforged.fml.startup.Client",
       "args": [
         "--username",
-        "henkelmax653",
+        "henkelmax192",
         "--version",
         "21.11.0-beta",
         "--assetIndex",

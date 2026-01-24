@@ -37,6 +37,10 @@ public class ClientManager {
     private final KeyEvents keyEvents;
     private final Minecraft minecraft;
     private boolean hasShownPermissionsMessage;
+    private int reconnectAttempts;
+    private boolean isReconnecting;
+    @Nullable
+    private Thread reconnectThread;
 
     private ClientManager() {
         playerStateManager = new ClientPlayerStateManager();
@@ -56,11 +60,13 @@ public class ClientManager {
             if (client != null) {
                 client.onVoiceChatConnected(connection);
             }
+            resetReconnectState();
         });
         ClientCompatibilityManager.INSTANCE.onVoiceChatDisconnected(() -> {
             if (client != null) {
                 client.onVoiceChatDisconnected();
             }
+            scheduleReconnect();
         });
 
         ClientServerNetManager.setClientListener(CommonCompatibilityManager.INSTANCE.getNetManager().secretChannel, (player, packet) -> authenticate(packet));
@@ -109,6 +115,7 @@ public class ClientManager {
             ClientCompatibilityManager.INSTANCE.emitDisconnectedEvent();
         }
         hasShownPermissionsMessage = false;
+        resetReconnectState();
         Voicechat.LOGGER.info("Sending secret request to the server");
         ClientServerNetManager.sendToServer(new RequestSecretPacket(Voicechat.COMPATIBILITY_VERSION));
         client = new ClientVoicechat();
@@ -137,6 +144,7 @@ public class ClientManager {
     }
 
     private void onDisconnect() {
+        cancelReconnect();
         if (client != null) {
             client.close();
             client = null;
@@ -166,6 +174,69 @@ public class ClientManager {
         }
         Component portComponent = ComponentUtils.copyOnClickText(String.valueOf(server.getPort()));
         Minecraft.getInstance().gui.getChat().addMessage(Component.translatable("message.voicechat.server_port", portComponent));
+    }
+
+    private void resetReconnectState() {
+        reconnectAttempts = 0;
+        isReconnecting = false;
+        cancelReconnect();
+    }
+
+    private void cancelReconnect() {
+        if (reconnectThread != null) {
+            reconnectThread.interrupt();
+            reconnectThread = null;
+        }
+    }
+
+    private void scheduleReconnect() {
+        if (!VoicechatClient.CLIENT_CONFIG.reconnectOnTimeout.get()) {
+            return;
+        }
+        if (isReconnecting) {
+            return;
+        }
+        if (minecraft.getConnection() == null || minecraft.player == null) {
+            Voicechat.LOGGER.info("Not reconnecting voice chat - player is not connected to a server");
+            return;
+        }
+        if (client == null) {
+            Voicechat.LOGGER.info("Not reconnecting voice chat - client is null");
+            return;
+        }
+
+        int maxAttempts = VoicechatClient.CLIENT_CONFIG.reconnectAttempts.get();
+        if (reconnectAttempts >= maxAttempts) {
+            Voicechat.LOGGER.warn("Voice chat reconnect failed after {} attempts", maxAttempts);
+            reconnectAttempts = 0;
+            return;
+        }
+
+        isReconnecting = true;
+        reconnectAttempts++;
+        int delayMs = VoicechatClient.CLIENT_CONFIG.reconnectDelayMs.get();
+
+        Voicechat.LOGGER.info("Scheduling voice chat reconnect attempt {} of {} in {}ms", reconnectAttempts, maxAttempts, delayMs);
+
+        reconnectThread = new Thread(() -> {
+            try {
+                Thread.sleep(delayMs);
+                if (minecraft.getConnection() != null && minecraft.player != null && client != null) {
+                    Voicechat.LOGGER.info("Attempting voice chat reconnect...");
+                    ClientServerNetManager.sendToServer(new RequestSecretPacket(Voicechat.COMPATIBILITY_VERSION));
+                }
+            } catch (InterruptedException e) {
+                Voicechat.LOGGER.info("Voice chat reconnect cancelled");
+            } finally {
+                isReconnecting = false;
+            }
+        }, "VoiceChatReconnectThread");
+        reconnectThread.setDaemon(true);
+        reconnectThread.start();
+    }
+
+    public void onSuccessfulConnection() {
+        reconnectAttempts = 0;
     }
 
     @Nullable
