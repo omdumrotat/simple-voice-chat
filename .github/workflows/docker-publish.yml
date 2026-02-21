@@ -49,7 +49,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build standalone JAR
-        run: ./gradlew common-proxy:shadowJar --no-daemon
+        run: |
+          chmod +x gradlew
+          ./gradlew common-proxy:shadowJar --no-daemon
 
       # -----------------------------------------------------------------
       # Set up QEMU for multi-platform builds (arm64 emulation)
