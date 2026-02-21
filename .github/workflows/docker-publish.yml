@@ -45,10 +45,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Build standalone JAR
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          arguments: common-proxy:shadowJar --no-daemon
+
+      - name: Build standalone JAR
+        run: ./gradlew common-proxy:shadowJar --no-daemon
 
       # -----------------------------------------------------------------
       # Set up QEMU for multi-platform builds (arm64 emulation)
