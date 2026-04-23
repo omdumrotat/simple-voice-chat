@@ -4,11 +4,11 @@ import de.maxhenkel.voicechat.Voicechat;
 import de.maxhenkel.voicechat.VoicechatClient;
 import de.maxhenkel.voicechat.api.Group;
 import de.maxhenkel.voicechat.gui.GroupType;
+import de.maxhenkel.voicechat.gui.VoiceChatScreenBase;
 import de.maxhenkel.voicechat.gui.tooltips.DisableTooltipSupplier;
 import de.maxhenkel.voicechat.gui.tooltips.HideGroupHudTooltipSupplier;
 import de.maxhenkel.voicechat.gui.tooltips.MuteTooltipSupplier;
 import de.maxhenkel.voicechat.gui.widgets.ImageButton;
-import de.maxhenkel.voicechat.gui.widgets.ListScreenBase;
 import de.maxhenkel.voicechat.gui.widgets.ToggleImageButton;
 import de.maxhenkel.voicechat.net.ClientServerNetManager;
 import de.maxhenkel.voicechat.net.LeaveGroupPacket;
@@ -24,13 +24,13 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 
-public class GroupScreen extends ListScreenBase {
+public class GroupScreen extends VoiceChatScreenBase {
 
     protected static final Identifier TEXTURE = Identifier.fromNamespaceAndPath(Voicechat.MODID, "textures/gui/gui_group.png");
-    protected static final Identifier LEAVE = Identifier.fromNamespaceAndPath(Voicechat.MODID, "textures/icons/leave.png");
-    protected static final Identifier MICROPHONE = Identifier.fromNamespaceAndPath(Voicechat.MODID, "textures/icons/microphone_button.png");
-    protected static final Identifier SPEAKER = Identifier.fromNamespaceAndPath(Voicechat.MODID, "textures/icons/speaker_button.png");
-    protected static final Identifier GROUP_HUD = Identifier.fromNamespaceAndPath(Voicechat.MODID, "textures/icons/group_hud_button.png");
+    protected static final Identifier LEAVE = Identifier.fromNamespaceAndPath(Voicechat.MODID, "icons/leave");
+    protected static final Identifier MICROPHONE = Identifier.fromNamespaceAndPath(Voicechat.MODID, "icons/microphone_button");
+    protected static final Identifier SPEAKER = Identifier.fromNamespaceAndPath(Voicechat.MODID, "icons/speaker_button");
+    protected static final Identifier GROUP_HUD = Identifier.fromNamespaceAndPath(Voicechat.MODID, "icons/group_hud_button");
     protected static final Component TITLE = Component.translatable("gui.voicechat.group.title");
     protected static final Component LEAVE_GROUP = Component.translatable("message.voicechat.leave_group");
 

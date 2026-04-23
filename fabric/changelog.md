@@ -1,4 +1,2 @@
-- Fixed incorrect entry in Simplified Chinese translation
-- Fixed OpenAL context destroy event potentially being fired multiple times
-- Fixed crash when opening LAN world
-- Fixed keybinds not applied properly from the voice chat settings screen
+- Added voice chat icons to GUI atlas
+- Improved invalid packet handling on servers

@@ -4,13 +4,13 @@ import de.maxhenkel.voicechat.Voicechat;
 import de.maxhenkel.voicechat.gui.GameProfileUtils;
 import de.maxhenkel.voicechat.gui.volume.AdjustVolumeSlider;
 import de.maxhenkel.voicechat.gui.volume.PlayerVolumeEntry;
-import de.maxhenkel.voicechat.gui.widgets.ListScreenBase;
 import de.maxhenkel.voicechat.gui.widgets.ListScreenEntryBase;
 import de.maxhenkel.voicechat.voice.client.ClientManager;
 import de.maxhenkel.voicechat.voice.client.ClientVoicechat;
 import de.maxhenkel.voicechat.voice.common.PlayerState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -19,19 +19,19 @@ import net.minecraft.world.entity.player.PlayerSkin;
 
 public class GroupEntry extends ListScreenEntryBase<GroupEntry> {
 
-    protected static final Identifier TALK_OUTLINE = Identifier.fromNamespaceAndPath(Voicechat.MODID, "textures/icons/talk_outline.png");
-    protected static final Identifier SPEAKER_OFF = Identifier.fromNamespaceAndPath(Voicechat.MODID, "textures/icons/speaker_small_off.png");
+    protected static final Identifier TALK_OUTLINE = Identifier.fromNamespaceAndPath(Voicechat.MODID, "icons/talk_outline");
+    protected static final Identifier SPEAKER_OFF = Identifier.fromNamespaceAndPath(Voicechat.MODID, "icons/speaker_small_off");
 
     protected static final int PADDING = 4;
     protected static final int BG_FILL = ARGB.color(255, 74, 74, 74);
     protected static final int PLAYER_NAME_COLOR = ARGB.color(255, 255, 255, 255);
 
-    protected final ListScreenBase parent;
+    protected final Screen parent;
     protected final Minecraft minecraft;
     protected PlayerState state;
     protected final AdjustVolumeSlider volumeSlider;
 
-    public GroupEntry(ListScreenBase parent, PlayerState state) {
+    public GroupEntry(Screen parent, PlayerState state) {
         this.parent = parent;
         this.minecraft = Minecraft.getInstance();
         this.state = state;
@@ -57,7 +57,7 @@ public class GroupEntry extends ListScreenEntryBase<GroupEntry> {
         if (!state.isDisabled()) {
             ClientVoicechat client = ClientManager.getClient();
             if (client != null && client.getTalkCache().isTalking(state.getUuid())) {
-                guiGraphics.blit(RenderPipelines.GUI_TEXTURED, TALK_OUTLINE, 0, 0, 0, 0, 10, 10, 16, 16);
+                guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, TALK_OUTLINE, 16, 16, 0, 0, 0, 0, 10, 10);
             }
         }
 
@@ -69,7 +69,7 @@ public class GroupEntry extends ListScreenEntryBase<GroupEntry> {
             guiGraphics.pose().pushMatrix();
             guiGraphics.pose().translate(1F, 1F);
             guiGraphics.pose().scale(0.5F, 0.5F);
-            guiGraphics.blit(RenderPipelines.GUI_TEXTURED, SPEAKER_OFF, 0, 0, 0, 0, 16, 16, 16, 16);
+            guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, SPEAKER_OFF, 0, 0, 16, 16);
             guiGraphics.pose().popMatrix();
         }
         guiGraphics.pose().popMatrix();

@@ -1,1 +1,0 @@
-- Improved vanish support warning

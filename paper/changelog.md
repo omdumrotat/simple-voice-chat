@@ -1,1 +1,2 @@
-- Improved voice chat group name validation
+- Added Esperanto translation
+- Improved invalid packet handling on servers

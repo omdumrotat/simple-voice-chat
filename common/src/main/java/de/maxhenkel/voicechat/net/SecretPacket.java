@@ -48,7 +48,7 @@ public class SecretPacket implements Packet<SecretPacket> {
         if (voiceHostConfig == null || voiceHostConfig.isEmpty()) {
             voiceHostConfig = serverConfig.voiceHost.get();
         }
-        this.voiceHost = PluginManager.instance().getVoiceHost(voiceHostConfig);
+        this.voiceHost = PluginManager.instance().getVoiceHost(player, voiceHostConfig);
         this.allowRecording = serverConfig.allowRecording.get();
     }
 
