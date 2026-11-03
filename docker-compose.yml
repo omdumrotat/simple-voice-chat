@@ -10,7 +10,8 @@
 # The config file will be auto-generated on first run at:
 #   ./voicechat-config/voicechat-standalone.properties
 #
-# The server refuses to start until `control_password` is set in that file. Use the same value as
+# If `control_password` is empty, a random one is generated and saved in that file on first start (and printed
+# once in the container log). Use the same value as
 # `standalone_password` in the game server's voice chat config. The container runs as uid 1000, so
 # ./voicechat-config must be writable by uid 1000.
 #
