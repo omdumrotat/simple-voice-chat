@@ -16,10 +16,12 @@ import net.minecraft.server.level.ServerPlayer;
 import javax.annotation.Nullable;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.security.GeneralSecurityException;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
@@ -31,12 +33,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class StandaloneVoicechatBridge {
 
-    private static final int CONTROL_PROTOCOL_VERSION = 2;
+    private static final int CONTROL_PROTOCOL_VERSION = 3;
     private static final byte MSG_HELLO = 0x1;
     private static final byte MSG_PLAYER_SECRET = 0x2;
     private static final byte MSG_PLAYER_STATE = 0x3;
     private static final byte MSG_PLAYER_POSITION = 0x4;
     private static final byte MSG_PLAYER_REMOVE = 0x5;
+    private static final byte MSG_HELLO_ACK = 0x6;
 
     private final BlockingQueue<StandaloneMessage> messageQueue;
     private final AtomicBoolean running;
@@ -46,6 +49,7 @@ public class StandaloneVoicechatBridge {
     private StandaloneTarget target;
     private volatile Socket socket;
     private volatile DataOutputStream out;
+    private volatile ControlCrypto.Session session;
 
     public StandaloneVoicechatBridge() {
         messageQueue = new LinkedBlockingQueue<>();
@@ -183,7 +187,7 @@ public class StandaloneVoicechatBridge {
                 if (message == null) {
                     continue;
                 }
-                message.write(out);
+                message.write(out, session);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } catch (Exception e) {
@@ -205,15 +209,47 @@ public class StandaloneVoicechatBridge {
         try {
             Socket newSocket = new Socket();
             newSocket.connect(new InetSocketAddress(target.host, target.port), 5000);
+            newSocket.setSoTimeout(5000);
             socket = newSocket;
-            out = new DataOutputStream(new BufferedOutputStream(newSocket.getOutputStream()));
+            DataOutputStream newOut = new DataOutputStream(new BufferedOutputStream(newSocket.getOutputStream()));
+            DataInputStream in = new DataInputStream(newSocket.getInputStream());
+
+            // Handshake: exchange random nonces, derive the session keys from the shared password
+            // and wait until the standalone server proves that it knows the password too.
+            byte[] key = ControlCrypto.deriveKey(Voicechat.SERVER_CONFIG.standalonePassword.get());
+            byte[] serverNonce = new byte[ControlCrypto.NONCE_SIZE];
+            in.readFully(serverNonce);
+            byte[] clientNonce = ControlCrypto.randomNonce();
+            newOut.write(clientNonce);
+            newOut.flush();
+            ControlCrypto.Session newSession = ControlCrypto.newSession(key, serverNonce, clientNonce, false);
+
+            createHello().write(newOut, newSession);
+            int ackLength = in.readInt();
+            if (ackLength <= 0 || ackLength > 1024) {
+                throw new IOException("Invalid handshake response");
+            }
+            byte[] ack = new byte[ackLength];
+            in.readFully(ack);
+            byte[] ackPlain;
+            try {
+                ackPlain = newSession.decrypt(ack);
+            } catch (GeneralSecurityException e) {
+                throw new IOException("The standalone server doesn't know the configured 'standalone_password' (or the connection was tampered with)", e);
+            }
+            if (ackPlain.length != 1 || ackPlain[0] != MSG_HELLO_ACK) {
+                throw new IOException("Unexpected handshake response");
+            }
+            newSocket.setSoTimeout(0);
+
+            out = newOut;
+            session = newSession;
             messageQueue.clear();
-            enqueue(createHello());
             queueFullSync();
             Voicechat.LOGGER.info("Connected to standalone voice chat server at {}:{}", target.host, target.port);
             return true;
         } catch (Exception e) {
-            Voicechat.LOGGER.warn("Failed to connect to standalone voice chat server at {}:{}", target.host, target.port);
+            Voicechat.LOGGER.warn("Failed to connect to standalone voice chat server at {}:{}: {}", target.host, target.port, e.getMessage());
             closeSocket();
             return false;
         }
@@ -233,6 +269,7 @@ public class StandaloneVoicechatBridge {
             }
         }
         out = null;
+        session = null;
         socket = null;
     }
 
@@ -244,7 +281,6 @@ public class StandaloneVoicechatBridge {
             out.writeDouble(Voicechat.SERVER_CONFIG.voiceChatDistance.get());
             out.writeDouble(Voicechat.SERVER_CONFIG.whisperDistance.get());
             out.writeDouble(Voicechat.SERVER_CONFIG.broadcastRange.get());
-            writeString(out, Voicechat.SERVER_CONFIG.standalonePassword.get());
         });
     }
 
@@ -317,13 +353,18 @@ public class StandaloneVoicechatBridge {
             this.writer = writer;
         }
 
-        public void write(DataOutputStream out) throws IOException {
+        public void write(DataOutputStream out, ControlCrypto.Session session) throws IOException {
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             DataOutputStream payload = new DataOutputStream(buffer);
             payload.writeByte(type);
             writer.write(payload);
             payload.flush();
-            byte[] data = buffer.toByteArray();
+            byte[] data;
+            try {
+                data = session.encrypt(buffer.toByteArray());
+            } catch (GeneralSecurityException e) {
+                throw new IOException(e);
+            }
             out.writeInt(data.length);
             out.write(data);
             out.flush();
