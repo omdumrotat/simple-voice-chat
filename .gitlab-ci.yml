@@ -1,0 +1,39 @@
+stages:
+  - build
+
+# Builds the Bukkit/Paper plugin (Minecraft 1.20.6, voice chat compatibility version 18)
+# and the standalone voice chat server jar.
+build:
+  stage: build
+  tags:
+    - mmdev
+  image: amazoncorretto:21.0.8
+  variables:
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  cache:
+    key: "gradle-$CI_COMMIT_REF_SLUG"
+    fallback_keys:
+      - "gradle-$CI_DEFAULT_BRANCH"
+    policy: pull-push
+    paths:
+      - .gradle/wrapper
+      - .gradle/caches
+      - .gradle/daemon
+      - .gradle/buildOutputCleanup
+  before_script:
+    - chmod +x gradlew
+  script:
+    - ./gradlew --no-daemon :bukkit:shadowJar :common-proxy:shadowJar
+    - mkdir -p output
+    - cp bukkit/build/libs/voicechat-bukkit-*.jar output/
+    - cp common-proxy/build/libs/*-standalone.jar output/
+    - ls -l output
+  artifacts:
+    paths:
+      - output/*.jar
+    expire_in: 4 weeks
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_BRANCH =~ /^dev\/.*$/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_TAG'

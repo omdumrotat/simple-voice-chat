@@ -145,6 +145,7 @@ public final class Voicechat extends JavaPlugin {
         }
         getServer().getServicesManager().unregister(apiService);
         if (SERVER != null) {
+            SERVER.shutdown();
             SERVER.getServer().close();
         }
     }

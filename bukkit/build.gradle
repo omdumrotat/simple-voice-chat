@@ -22,12 +22,25 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 repositories {
     mavenCentral()
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
     maven { url = 'https://libraries.minecraft.net/' }
     maven { url = 'https://repo.extendedclip.com/content/repositories/placeholderapi/' }
     maven { url = 'https://repo.viaversion.com/' }
 }
 
+// The shared build script declares org.bukkit:craftbukkit, which is only published locally by Spigot's BuildTools.
+// The plugin only needs the Bukkit API at compile time (NMS is accessed via reflection), so use the public Paper API instead.
+configurations.configureEach {
+    exclude group: 'org.bukkit', module: 'craftbukkit'
+}
+
 dependencies {
+    compileOnly "io.papermc.paper:paper-api:${bukkit_version}"
+    // Provided at runtime by the server (transitive dependency of craftbukkit)
+    compileOnly "io.netty:netty-buffer:4.1.97.Final"
+    compileOnly "io.netty:netty-codec:4.1.97.Final"
+    compileOnly "io.netty:netty-common:4.1.97.Final"
+
     implementation "org.json:json:${json_version}"
     shadow "org.json:json:${json_version}"
 
@@ -71,7 +84,7 @@ tasks.register('generateBuildConstants', Copy) {
 compileJava.dependsOn generateBuildConstants
 
 tasks.register('generateFallbackTranslations') {
-    def inputFile = project(":common").file('src/main/resources/assets/voicechat/lang/en_us.json')
+    def inputFile = file('src/main/lang/en_us.json')
     def outputFile = file("${layout.buildDirectory.asFile.get()}/generated/java/de/maxhenkel/voicechat/FallbackTranslations.java")
     inputs.file inputFile
     outputs.file outputFile
