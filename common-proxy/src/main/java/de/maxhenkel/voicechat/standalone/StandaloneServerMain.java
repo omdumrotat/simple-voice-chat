@@ -20,6 +20,12 @@ public class StandaloneServerMain {
             return;
         }
 
+        if (config.controlPassword.get().isEmpty()) {
+            logger.error("'control_password' is not set in {}. Set a long random password (and use the same value as 'standalone_password' on the game server) - refusing to start without it.", configPath.toAbsolutePath());
+            System.exit(1);
+            return;
+        }
+
         StandaloneVoicechatServer server = new StandaloneVoicechatServer(logger, config);
         server.start();
 

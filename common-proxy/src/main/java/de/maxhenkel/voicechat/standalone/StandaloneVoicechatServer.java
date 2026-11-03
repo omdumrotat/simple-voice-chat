@@ -20,6 +20,7 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
@@ -48,6 +49,11 @@ public class StandaloneVoicechatServer {
     private static final byte MSG_PLAYER_STATE = 0x3;
     private static final byte MSG_PLAYER_POSITION = 0x4;
     private static final byte MSG_PLAYER_REMOVE = 0x5;
+
+    private static final int CONTROL_PROTOCOL_VERSION = 2;
+    private static final int CONTROL_AUTH_TIMEOUT_MS = 5_000;
+    private static final int CONTROL_MAX_UNAUTHENTICATED_FRAME = 1024;
+    private static final int CONTROL_MAX_FRAME = 64 * 1024;
 
     private static final byte GROUP_TYPE_NORMAL = 0;
     private static final byte GROUP_TYPE_OPEN = 1;
@@ -503,6 +509,13 @@ public class StandaloneVoicechatServer {
             thread.start();
         }
 
+        public synchronized void activate(ControlConnection newConnection) {
+            if (connection != null && connection != newConnection) {
+                connection.close();
+            }
+            connection = newConnection;
+        }
+
         public void close() {
             try {
                 if (connection != null) {
@@ -521,11 +534,8 @@ public class StandaloneVoicechatServer {
                 logger.info("Standalone control server started at port {}", port);
                 while (running && !serverSocket.isClosed()) {
                     Socket socket = serverSocket.accept();
-                    if (connection != null) {
-                        connection.close();
-                    }
-                    connection = new ControlConnection(socket);
-                    connection.start();
+                    // The new connection must authenticate with the shared password before it replaces the active one
+                    new ControlConnection(socket).start();
                 }
             } catch (Exception e) {
                 if (running) {
@@ -549,6 +559,7 @@ public class StandaloneVoicechatServer {
     private class ControlConnection extends Thread {
         private final Socket socket;
         private DataInputStream in;
+        private boolean authenticated;
 
         public ControlConnection(Socket socket) {
             super("VoiceChatStandaloneControlConnection");
@@ -558,17 +569,24 @@ public class StandaloneVoicechatServer {
         @Override
         public void run() {
             try {
+                socket.setSoTimeout(CONTROL_AUTH_TIMEOUT_MS);
                 in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
                 while (running && !socket.isClosed()) {
                     int length = in.readInt();
                     if (length <= 0) {
                         continue;
                     }
+                    if (length > (authenticated ? CONTROL_MAX_FRAME : CONTROL_MAX_UNAUTHENTICATED_FRAME)) {
+                        logger.warn("Closing control connection from {}: frame too large", socket.getRemoteSocketAddress());
+                        return;
+                    }
                     byte[] data = new byte[length];
                     in.readFully(data);
                     handleControlMessage(data);
                 }
             } catch (EOFException ignored) {
+            } catch (java.net.SocketTimeoutException e) {
+                logger.warn("Closing control connection from {}: no hello received in time", socket.getRemoteSocketAddress());
             } catch (Exception e) {
                 if (running) {
                     logger.warn("Control connection error", e);
@@ -588,19 +606,45 @@ public class StandaloneVoicechatServer {
         private void handleControlMessage(byte[] data) throws IOException {
             DataInputStream payload = new DataInputStream(new ByteArrayInputStream(data));
             byte type = payload.readByte();
+            if (!authenticated && type != MSG_HELLO) {
+                logger.warn("Closing control connection from {}: expected hello", socket.getRemoteSocketAddress());
+                close();
+                return;
+            }
             if (type == MSG_HELLO) {
                 int protocolVersion = payload.readInt();
                 int compatibilityVersion = payload.readInt();
-                if (protocolVersion != 1) {
-                    logger.warn("Unsupported control protocol {}", protocolVersion);
+                if (protocolVersion != CONTROL_PROTOCOL_VERSION) {
+                    logger.warn("Closing control connection from {}: unsupported control protocol {} (expected {})", socket.getRemoteSocketAddress(), protocolVersion, CONTROL_PROTOCOL_VERSION);
+                    close();
+                    return;
                 }
                 if (compatibilityVersion != BuildConstants.COMPATIBILITY_VERSION) {
                     logger.warn("Standalone compatibility mismatch (server={}, client={})", BuildConstants.COMPATIBILITY_VERSION, compatibilityVersion);
                 }
-                keepAlive = payload.readInt();
-                voiceChatDistance = payload.readDouble();
-                whisperDistance = payload.readDouble();
-                broadcastRange = payload.readDouble();
+                int newKeepAlive = payload.readInt();
+                double newVoiceChatDistance = payload.readDouble();
+                double newWhisperDistance = payload.readDouble();
+                double newBroadcastRange = payload.readDouble();
+                String password = readString(payload);
+                if (!passwordMatches(password)) {
+                    logger.warn("Closing control connection from {}: invalid control password", socket.getRemoteSocketAddress());
+                    close();
+                    return;
+                }
+                keepAlive = newKeepAlive;
+                voiceChatDistance = newVoiceChatDistance;
+                whisperDistance = newWhisperDistance;
+                broadcastRange = newBroadcastRange;
+                authenticated = true;
+                try {
+                    socket.setSoTimeout(0);
+                } catch (IOException ignored) {
+                }
+                if (controlServer != null) {
+                    controlServer.activate(this);
+                }
+                logger.info("Game server connected from {}", socket.getRemoteSocketAddress());
                 return;
             }
             if (type == MSG_PLAYER_SECRET) {
@@ -651,6 +695,14 @@ public class StandaloneVoicechatServer {
         }
     }
 
+    private boolean passwordMatches(String provided) {
+        byte[] expected = config.controlPassword.get().getBytes(StandardCharsets.UTF_8);
+        if (expected.length == 0) {
+            return false;
+        }
+        return MessageDigest.isEqual(expected, provided.getBytes(StandardCharsets.UTF_8));
+    }
+
     private static UUID readUUID(DataInputStream in) throws IOException {
         return new UUID(in.readLong(), in.readLong());
     }
@@ -659,6 +711,9 @@ public class StandaloneVoicechatServer {
         int size = in.readInt();
         if (size < 0) {
             return "";
+        }
+        if (size > CONTROL_MAX_FRAME) {
+            throw new IOException("String too long");
         }
         byte[] bytes = new byte[size];
         in.readFully(bytes);

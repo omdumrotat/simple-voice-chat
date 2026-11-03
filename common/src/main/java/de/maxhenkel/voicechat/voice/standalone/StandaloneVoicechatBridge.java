@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class StandaloneVoicechatBridge {
 
-    private static final int CONTROL_PROTOCOL_VERSION = 1;
+    private static final int CONTROL_PROTOCOL_VERSION = 2;
     private static final byte MSG_HELLO = 0x1;
     private static final byte MSG_PLAYER_SECRET = 0x2;
     private static final byte MSG_PLAYER_STATE = 0x3;
@@ -244,6 +244,7 @@ public class StandaloneVoicechatBridge {
             out.writeDouble(Voicechat.SERVER_CONFIG.voiceChatDistance.get());
             out.writeDouble(Voicechat.SERVER_CONFIG.whisperDistance.get());
             out.writeDouble(Voicechat.SERVER_CONFIG.broadcastRange.get());
+            writeString(out, Voicechat.SERVER_CONFIG.standalonePassword.get());
         });
     }
 
@@ -293,6 +294,10 @@ public class StandaloneVoicechatBridge {
             String host = Voicechat.SERVER_CONFIG.standaloneHost.get().trim();
             if (host.isEmpty()) {
                 Voicechat.LOGGER.warn("Standalone server is enabled but no host is configured");
+                return null;
+            }
+            if (Voicechat.SERVER_CONFIG.standalonePassword.get().isEmpty()) {
+                Voicechat.LOGGER.warn("Standalone server is enabled but no 'standalone_password' is configured");
                 return null;
             }
             return new StandaloneTarget(host, Voicechat.SERVER_CONFIG.standalonePort.get());

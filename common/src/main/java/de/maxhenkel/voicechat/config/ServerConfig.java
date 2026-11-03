@@ -30,6 +30,7 @@ public class ServerConfig {
     public ConfigEntry<Boolean> standaloneServer;
     public ConfigEntry<String> standaloneHost;
     public ConfigEntry<Integer> standalonePort;
+    public ConfigEntry<String> standalonePassword;
     public ConfigEntry<Integer> standaloneUpdateInterval;
 
     public ServerConfig(ConfigBuilder builder) {
@@ -140,6 +141,12 @@ public class ServerConfig {
         standalonePort = builder
                 .integerEntry("standalone_port", 24454, 1, 65535,
                         "The UDP/TCP port of the standalone server"
+                );
+        standalonePassword = builder
+                .stringEntry("standalone_password", "",
+                        "The shared password used to authenticate with the standalone server's control port",
+                        "Must be identical to 'control_password' in the standalone server's config",
+                        "The connection to the standalone server is not made if this is empty"
                 );
         standaloneUpdateInterval = builder
                 .integerEntry("standalone_update_interval", 100, 10, 60_000,

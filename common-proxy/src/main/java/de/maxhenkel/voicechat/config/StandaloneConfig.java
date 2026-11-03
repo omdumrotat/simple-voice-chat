@@ -9,6 +9,7 @@ public class StandaloneConfig {
     public ConfigEntry<Integer> port;
     public ConfigEntry<String> bindAddress;
     public ConfigEntry<Integer> controlPort;
+    public ConfigEntry<String> controlPassword;
     public ConfigEntry<Boolean> allowPings;
     public ConfigEntry<Integer> keepAlive;
     public ConfigEntry<Double> voiceChatDistance;
@@ -34,6 +35,13 @@ public class StandaloneConfig {
                 .integerEntry("control_port", -1, -1, 65535,
                         "The TCP port to use for control updates from the game server",
                         "Set to '-1' to use the same value as 'port'"
+                );
+
+        controlPassword = builder
+                .stringEntry("control_password", "",
+                        "The shared password the game server has to send when connecting to the control port",
+                        "Must be identical to 'standalone_password' in the game server's voice chat config",
+                        "The standalone server refuses to start if this is empty"
                 );
 
         allowPings = builder
