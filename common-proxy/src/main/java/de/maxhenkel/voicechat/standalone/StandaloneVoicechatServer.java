@@ -20,7 +20,8 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import java.io.DataOutputStream;
+import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
@@ -49,8 +50,9 @@ public class StandaloneVoicechatServer {
     private static final byte MSG_PLAYER_STATE = 0x3;
     private static final byte MSG_PLAYER_POSITION = 0x4;
     private static final byte MSG_PLAYER_REMOVE = 0x5;
+    private static final byte MSG_HELLO_ACK = 0x6;
 
-    private static final int CONTROL_PROTOCOL_VERSION = 2;
+    private static final int CONTROL_PROTOCOL_VERSION = 3;
     private static final int CONTROL_AUTH_TIMEOUT_MS = 5_000;
     private static final int CONTROL_MAX_UNAUTHENTICATED_FRAME = 1024;
     private static final int CONTROL_MAX_FRAME = 64 * 1024;
@@ -72,6 +74,8 @@ public class StandaloneVoicechatServer {
     private Thread udpReaderThread;
     private Thread processThread;
     private ControlServer controlServer;
+
+    private volatile byte[] controlKey;
 
     private volatile boolean allowPings;
     private volatile int keepAlive;
@@ -99,6 +103,13 @@ public class StandaloneVoicechatServer {
         voiceChatDistance = config.voiceChatDistance.get();
         whisperDistance = config.whisperDistance.get();
         broadcastRange = config.broadcastRange.get();
+
+        try {
+            controlKey = ControlCrypto.deriveKey(config.controlPassword.get());
+        } catch (GeneralSecurityException e) {
+            running = false;
+            throw new IllegalStateException("Failed to derive the control key", e);
+        }
 
         openSocket();
 
@@ -559,6 +570,8 @@ public class StandaloneVoicechatServer {
     private class ControlConnection extends Thread {
         private final Socket socket;
         private DataInputStream in;
+        private DataOutputStream out;
+        private ControlCrypto.Session session;
         private boolean authenticated;
 
         public ControlConnection(Socket socket) {
@@ -571,6 +584,16 @@ public class StandaloneVoicechatServer {
             try {
                 socket.setSoTimeout(CONTROL_AUTH_TIMEOUT_MS);
                 in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+                out = new DataOutputStream(socket.getOutputStream());
+
+                // Handshake: both sides contribute a random nonce, then every frame is authenticated and encrypted
+                byte[] serverNonce = ControlCrypto.randomNonce();
+                out.write(serverNonce);
+                out.flush();
+                byte[] clientNonce = new byte[ControlCrypto.NONCE_SIZE];
+                in.readFully(clientNonce);
+                session = ControlCrypto.newSession(controlKey, serverNonce, clientNonce, true);
+
                 while (running && !socket.isClosed()) {
                     int length = in.readInt();
                     if (length <= 0) {
@@ -582,17 +605,38 @@ public class StandaloneVoicechatServer {
                     }
                     byte[] data = new byte[length];
                     in.readFully(data);
-                    handleControlMessage(data);
+                    byte[] plain;
+                    try {
+                        plain = session.decrypt(data);
+                    } catch (GeneralSecurityException e) {
+                        logger.warn("Closing control connection from {}: invalid control password or corrupted/replayed frame", socket.getRemoteSocketAddress());
+                        return;
+                    }
+                    handleControlMessage(plain);
                 }
             } catch (EOFException ignored) {
             } catch (java.net.SocketTimeoutException e) {
-                logger.warn("Closing control connection from {}: no hello received in time", socket.getRemoteSocketAddress());
+                logger.warn("Closing control connection from {}: no valid hello received in time", socket.getRemoteSocketAddress());
             } catch (Exception e) {
-                if (running) {
+                // A closed socket means this connection was closed on purpose (replaced by a new game server connection)
+                if (running && !socket.isClosed()) {
                     logger.warn("Control connection error", e);
                 }
             } finally {
                 close();
+            }
+        }
+
+        private void send(byte[] plain) throws IOException {
+            try {
+                byte[] encrypted = session.encrypt(plain);
+                synchronized (out) {
+                    out.writeInt(encrypted.length);
+                    out.write(encrypted);
+                    out.flush();
+                }
+            } catch (GeneralSecurityException e) {
+                throw new IOException(e);
             }
         }
 
@@ -626,12 +670,6 @@ public class StandaloneVoicechatServer {
                 double newVoiceChatDistance = payload.readDouble();
                 double newWhisperDistance = payload.readDouble();
                 double newBroadcastRange = payload.readDouble();
-                String password = readString(payload);
-                if (!passwordMatches(password)) {
-                    logger.warn("Closing control connection from {}: invalid control password", socket.getRemoteSocketAddress());
-                    close();
-                    return;
-                }
                 keepAlive = newKeepAlive;
                 voiceChatDistance = newVoiceChatDistance;
                 whisperDistance = newWhisperDistance;
@@ -644,6 +682,7 @@ public class StandaloneVoicechatServer {
                 if (controlServer != null) {
                     controlServer.activate(this);
                 }
+                send(new byte[]{MSG_HELLO_ACK});
                 logger.info("Game server connected from {}", socket.getRemoteSocketAddress());
                 return;
             }
@@ -693,14 +732,6 @@ public class StandaloneVoicechatServer {
                 unCheckedConnections.remove(player);
             }
         }
-    }
-
-    private boolean passwordMatches(String provided) {
-        byte[] expected = config.controlPassword.get().getBytes(StandardCharsets.UTF_8);
-        if (expected.length == 0) {
-            return false;
-        }
-        return MessageDigest.isEqual(expected, provided.getBytes(StandardCharsets.UTF_8));
     }
 
     private static UUID readUUID(DataInputStream in) throws IOException {

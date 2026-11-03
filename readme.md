@@ -30,6 +30,9 @@ The game server plugin pushes secrets, positions and groups to it over a TCP con
 4. Open the UDP port to players. **Firewall the TCP control port so only the game server can reach it**
    (it is password protected, but there is no reason to expose it).
 
+The control connection (game server → standalone) is authenticated and encrypted (AES-256-GCM, keys derived from the shared password), so
+it is safe to use over untrusted networks as long as the password is long and random. The UDP voice traffic is encrypted per player as usual.
+
 Notes: the standalone server does not know about sneaking, so the 'sneak' distance reduction is not applied.
 
 ## Docker
