@@ -32,6 +32,18 @@ The game server plugin pushes secrets, positions and groups to it over a TCP con
 
 Notes: the standalone server does not know about sneaking, so the 'sneak' distance reduction is not applied.
 
+## Docker
+
+```
+./gradlew :common-proxy:shadowJar
+docker build -t voicechat-standalone .      # or: podman build ...
+docker run -d -p 24454:24454/udp -p 24454:24454/tcp -v ./voicechat-config:/app/config voicechat-standalone
+```
+
+The container runs as uid 1000, so the mounted config directory must be writable by uid 1000
+(with rootless Podman add `--userns=keep-id:uid=1000,gid=1000`). Create `voicechat-config/voicechat-standalone.properties`
+with at least `control_password=...` before the first start.
+
 ## Build
 
 Requires JDK 21.

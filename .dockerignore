@@ -1,0 +1,62 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Gradle caches
+.gradle/
+
+# Runtime directories
+**/run/
+**/runs/
+
+# OS files
+*.DS_Store
+Thumbs.db
+
+# Docker files (avoid recursive builds)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation & CI (not needed in build context)
+*.md
+LICENSE
+license
+.github/
+
+# Source code (not needed — only the pre-built JAR is copied)
+**/src/
+api/
+assets/
+bukkit/
+bungeecord/
+common/
+common-client/
+fabric/
+forge/
+neoforge/
+paper/
+quilt/
+velocity/
+
+# Exclude build outputs except common-proxy standalone JAR
+api/build/
+bukkit/build/
+bungeecord/build/
+common/build/
+common-client/build/
+fabric/build/
+forge/build/
+neoforge/build/
+paper/build/
+quilt/build/
+velocity/build/
+build/

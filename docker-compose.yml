@@ -1,0 +1,20 @@
+# Standalone voice chat server (Minecraft 1.20.6 / voice chat compatibility version 18)
+#
+#   ./gradlew :common-proxy:shadowJar
+#   docker compose up -d --build
+#
+# The config is generated on first start in ./voicechat-config/voicechat-standalone.properties.
+# Set `control_password` there (the server refuses to start without it) and restart.
+services:
+  voicechat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: voicechat-standalone
+    restart: unless-stopped
+    ports:
+      - "24454:24454/udp"
+      # Control port: restrict to the game server's IP with a firewall
+      - "24454:24454/tcp"
+    volumes:
+      - ./voicechat-config:/app/config
