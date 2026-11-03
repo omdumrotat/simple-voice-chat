@@ -38,7 +38,7 @@ jobs:
       - name: Build standalone JAR
         run: |
           chmod +x gradlew
-          ./gradlew :common-proxy:shadowJar --no-daemon
+          ./gradlew --configure-on-demand :common-proxy:shadowJar --no-daemon
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
