@@ -41,7 +41,7 @@ public class StandaloneConfig {
                 .stringEntry("control_password", "",
                         "The shared password the game server has to send when connecting to the control port",
                         "Must be identical to 'standalone_password' in the game server's voice chat config",
-                        "The standalone server refuses to start if this is empty"
+                        "If this is empty, a random password is generated and saved here on startup"
                 );
 
         allowPings = builder

@@ -18,8 +18,9 @@ The standalone server handles the UDP voice traffic so it can run on a different
 The game server plugin pushes secrets, positions and groups to it over a TCP control connection (default: same port number).
 
 1. Start the standalone server once: `java -jar voicechat-...-standalone.jar`. It writes
-   `config/voicechat-standalone.properties` and **refuses to start until `control_password` is set**.
-2. Set a long random `control_password` in that file and start it again.
+   `config/voicechat-standalone.properties`. If `control_password` is empty, a long random one is generated, saved to that
+   file and printed once in the log (it refuses to start if the file can't be written).
+2. Copy that value (or set your own long random `control_password` and restart).
 3. In the plugin's `voicechat-server.properties` set:
    ```
    standalone_server=true

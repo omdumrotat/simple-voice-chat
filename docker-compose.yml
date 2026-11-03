@@ -4,7 +4,8 @@
 #   docker compose up -d --build
 #
 # The config is generated on first start in ./voicechat-config/voicechat-standalone.properties.
-# Set `control_password` there (the server refuses to start without it) and restart.
+# If `control_password` is empty, a random one is generated and saved there on first start (it is also printed
+# once in the container log). Use it as `standalone_password` on the game server.
 services:
   voicechat:
     build:

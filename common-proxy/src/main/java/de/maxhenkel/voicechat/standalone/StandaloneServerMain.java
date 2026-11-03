@@ -5,7 +5,11 @@ import de.maxhenkel.voicechat.config.StandaloneConfig;
 import de.maxhenkel.voicechat.logging.SystemOutLogger;
 import de.maxhenkel.voicechat.logging.VoiceChatLogger;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 
 public class StandaloneServerMain {
 
@@ -20,8 +24,7 @@ public class StandaloneServerMain {
             return;
         }
 
-        if (config.controlPassword.get().isEmpty()) {
-            logger.error("'control_password' is not set in {}. Set a long random password (and use the same value as 'standalone_password' on the game server) - refusing to start without it.", configPath.toAbsolutePath());
+        if (config.controlPassword.get().isEmpty() && !generateControlPassword(logger, config, configPath)) {
             System.exit(1);
             return;
         }
@@ -30,5 +33,39 @@ public class StandaloneServerMain {
         server.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(server::stop, "VoiceChatStandaloneShutdown"));
+    }
+
+    private static final String PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    private static final int PASSWORD_LENGTH = 40;
+
+    /**
+     * Generates a random control password, saves it to the config and prints it once so it can be copied to the
+     * game server's 'standalone_password'.
+     *
+     * @return false if the password couldn't be persisted (it would be lost on the next start)
+     */
+    private static boolean generateControlPassword(VoiceChatLogger logger, StandaloneConfig config, Path configPath) {
+        SecureRandom random = new SecureRandom();
+        StringBuilder password = new StringBuilder(PASSWORD_LENGTH);
+        for (int i = 0; i < PASSWORD_LENGTH; i++) {
+            password.append(PASSWORD_CHARS.charAt(random.nextInt(PASSWORD_CHARS.length())));
+        }
+        String generated = password.toString();
+        config.controlPassword.set(generated).saveSync();
+
+        // The config library only logs save errors, so make sure the password really is in the file
+        boolean persisted;
+        try {
+            persisted = Files.readString(configPath, StandardCharsets.UTF_8).contains(generated);
+        } catch (IOException e) {
+            persisted = false;
+        }
+        if (!persisted) {
+            logger.error("'control_password' is not set and the generated password couldn't be saved to {} (is the directory writable?) - refusing to start.", configPath.toAbsolutePath());
+            return false;
+        }
+        logger.warn("'control_password' was not set. Generated a random one and saved it to {}", configPath.toAbsolutePath());
+        logger.warn("Set this on the game server (voicechat-server.properties): standalone_password={}", generated);
+        return true;
     }
 }
