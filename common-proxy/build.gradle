@@ -1,5 +1,11 @@
 apply plugin: 'com.gradleup.shadow'
 
+// Declared before the shared build script so that Maven Central is searched before libraries.minecraft.net
+// (which hosts some POMs without their parent POMs, e.g. jsr305)
+repositories {
+    mavenCentral()
+}
+
 apply from: "https://raw.githubusercontent.com/henkelmax/mod-gradle-scripts/${mod_gradle_script_version}/mod.gradle"
 
 sourceSets {
