@@ -23,6 +23,9 @@ import java.nio.charset.StandardCharsets;
 import java.io.DataOutputStream;
 import java.security.GeneralSecurityException;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,7 +55,7 @@ public class StandaloneVoicechatServer {
     private static final byte MSG_PLAYER_REMOVE = 0x5;
     private static final byte MSG_HELLO_ACK = 0x6;
 
-    private static final int CONTROL_PROTOCOL_VERSION = 3;
+    private static final int CONTROL_PROTOCOL_VERSION = 4;
     private static final int CONTROL_AUTH_TIMEOUT_MS = 5_000;
     private static final int CONTROL_MAX_UNAUTHENTICATED_FRAME = 1024;
     private static final int CONTROL_MAX_FRAME = 64 * 1024;
@@ -322,6 +325,13 @@ public class StandaloneVoicechatServer {
         if (senderState == null || !senderState.hasPosition()) {
             return;
         }
+        StaffRouting override = senderState.staffRouting;
+        if (override != null) {
+            if (isActive(override)) {
+                processGroupPackets(senderId, override.transmit, data, sequenceNumber);
+            }
+            return;
+        }
         UUID groupId = senderState.groupId;
         if (groupId != null) {
             processGroupPacket(senderId, groupId, data, sequenceNumber);
@@ -334,8 +344,23 @@ public class StandaloneVoicechatServer {
     }
 
     private void processGroupPacket(UUID senderId, UUID groupId, byte[] data, long sequenceNumber) {
+        processGroupPackets(senderId, Collections.singleton(groupId), data, sequenceNumber);
+    }
+
+    private boolean isActive(StaffRouting routing) {
+        return controlServer != null && controlServer.connection == routing.owner && !routing.owner.socket.isClosed();
+    }
+
+    private void processGroupPackets(UUID senderId, Set<UUID> sourceGroups, byte[] data, long sequenceNumber) {
+        if (sourceGroups.isEmpty()) {
+            return;
+        }
         for (StandalonePlayerState state : states.values()) {
-            if (!groupId.equals(state.groupId)) {
+            StaffRouting listener = state.staffRouting;
+            boolean receives = listener == null
+                    ? state.groupId != null && sourceGroups.contains(state.groupId)
+                    : isActive(listener) && !Collections.disjoint(sourceGroups, listener.listen);
+            if (!receives) {
                 continue;
             }
             if (senderId.equals(state.playerUUID)) {
@@ -367,7 +392,7 @@ public class StandaloneVoicechatServer {
             if (senderGroup != null && senderGroup.equals(state.groupId)) {
                 continue;
             }
-            if (state.groupType == GROUP_TYPE_ISOLATED) {
+            if (state.staffRouting != null || state.groupType == GROUP_TYPE_ISOLATED) {
                 continue;
             }
             if (state.disabled || state.disconnected) {
@@ -509,7 +534,7 @@ public class StandaloneVoicechatServer {
         private final int port;
         private Thread thread;
         private ServerSocket serverSocket;
-        private ControlConnection connection;
+        private volatile ControlConnection connection;
 
         public ControlServer(int port) {
             this.port = port;
@@ -647,6 +672,18 @@ public class StandaloneVoicechatServer {
             }
         }
 
+        private Set<UUID> readRoutingGroups(DataInputStream payload) throws IOException {
+            int count = payload.readInt();
+            if (count < 0 || count > 4) {
+                throw new IOException("Invalid routing group count");
+            }
+            Set<UUID> groups = new HashSet<>();
+            for (int i = 0; i < count; i++) {
+                groups.add(readUUID(payload));
+            }
+            return Set.copyOf(groups);
+        }
+
         private void handleControlMessage(byte[] data) throws IOException {
             DataInputStream payload = new DataInputStream(new ByteArrayInputStream(data));
             byte type = payload.readByte();
@@ -704,7 +741,14 @@ public class StandaloneVoicechatServer {
                     groupId = readUUID(payload);
                     groupType = payload.readByte();
                 }
+                StaffRouting override = null;
+                if (payload.readBoolean()) {
+                    Set<UUID> listen = readRoutingGroups(payload);
+                    Set<UUID> transmit = readRoutingGroups(payload);
+                    override = new StaffRouting(listen, transmit, this);
+                }
                 StandalonePlayerState state = states.computeIfAbsent(player, StandalonePlayerState::new);
+                state.staffRouting = override;
                 state.disabled = disabled;
                 state.disconnected = disconnected;
                 state.groupId = groupId;
@@ -783,7 +827,11 @@ public class StandaloneVoicechatServer {
         }
     }
 
+    private record StaffRouting(Set<UUID> listen, Set<UUID> transmit, ControlConnection owner) {
+    }
+
     private static class StandalonePlayerState {
+        private volatile StaffRouting staffRouting;
         private final UUID playerUUID;
         private double x;
         private double y;

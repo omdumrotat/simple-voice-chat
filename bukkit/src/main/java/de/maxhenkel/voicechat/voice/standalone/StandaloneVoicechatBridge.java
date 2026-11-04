@@ -1,6 +1,7 @@
 package de.maxhenkel.voicechat.voice.standalone;
 
 import de.maxhenkel.voicechat.Voicechat;
+import de.maxhenkel.voicechat.api.StandaloneRoutingService;
 import de.maxhenkel.voicechat.plugins.impl.GroupImpl;
 import de.maxhenkel.voicechat.voice.common.PlayerState;
 import de.maxhenkel.voicechat.voice.server.Group;
@@ -9,6 +10,7 @@ import de.maxhenkel.voicechat.voice.server.Server;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.ServicePriority;
 
 import javax.annotation.Nullable;
 import java.io.BufferedOutputStream;
@@ -20,13 +22,14 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.GeneralSecurityException;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class StandaloneVoicechatBridge {
+public class StandaloneVoicechatBridge implements StandaloneRoutingService {
 
-    private static final int CONTROL_PROTOCOL_VERSION = 3;
+    private static final int CONTROL_PROTOCOL_VERSION = 4;
     private static final byte MSG_HELLO = 0x1;
     private static final byte MSG_PLAYER_SECRET = 0x2;
     private static final byte MSG_PLAYER_STATE = 0x3;
@@ -36,6 +39,8 @@ public class StandaloneVoicechatBridge {
 
     private final BlockingQueue<StandaloneMessage> messageQueue;
     private final AtomicBoolean running;
+    private final ConcurrentMap<UUID, Routing> routing = new ConcurrentHashMap<>();
+
     private ScheduledExecutorService scheduler;
     private Thread senderThread;
     private StandaloneTarget target;
@@ -48,6 +53,27 @@ public class StandaloneVoicechatBridge {
         running = new AtomicBoolean(false);
     }
 
+    private record Routing(Set<UUID> listen, Set<UUID> transmit) {
+    }
+
+    @Override
+    public boolean isAvailable() {
+        return running.get() && session != null;
+    }
+
+    @Override
+    public void setRouting(UUID player, Set<UUID> listenGroups, Set<UUID> transmitGroups) {
+        if (listenGroups.size() > 4 || transmitGroups.size() > 4) {
+            throw new IllegalArgumentException("At most four groups per direction");
+        }
+        routing.put(player, new Routing(Set.copyOf(listenGroups), Set.copyOf(transmitGroups)));
+    }
+
+    @Override
+    public void clearRouting(UUID player) {
+        routing.remove(player);
+    }
+
     public void start() {
         if (running.get()) {
             return;
@@ -57,6 +83,7 @@ public class StandaloneVoicechatBridge {
             return;
         }
         running.set(true);
+        Bukkit.getServicesManager().register(StandaloneRoutingService.class, this, Voicechat.INSTANCE, ServicePriority.Normal);
 
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "VoiceChatStandaloneSync");
@@ -73,6 +100,8 @@ public class StandaloneVoicechatBridge {
 
     public void stop() {
         running.set(false);
+        Bukkit.getServicesManager().unregister(StandaloneRoutingService.class, this);
+        routing.clear();
         if (scheduler != null) {
             scheduler.shutdownNow();
             scheduler = null;
@@ -98,6 +127,7 @@ public class StandaloneVoicechatBridge {
     }
 
     public void removePlayer(UUID playerUUID) {
+        routing.remove(playerUUID);
         enqueue(message(MSG_PLAYER_REMOVE, out -> writeUUID(out, playerUUID)));
     }
 
@@ -145,6 +175,7 @@ public class StandaloneVoicechatBridge {
         UUID groupId = state.getGroup();
         byte groupType = toGroupType(groupId == null ? null : voiceServer.getGroupManager().getGroup(groupId));
 
+        Routing override = routing.get(player.getUniqueId());
         enqueue(message(MSG_PLAYER_STATE, out -> {
             writeUUID(out, player.getUniqueId());
             out.writeBoolean(finalState.isDisabled());
@@ -153,6 +184,17 @@ public class StandaloneVoicechatBridge {
             if (groupId != null) {
                 writeUUID(out, groupId);
                 out.writeByte(groupType);
+            }
+            out.writeBoolean(override != null);
+            if (override != null) {
+                out.writeInt(override.listen().size());
+                for (UUID id : override.listen()) {
+                    writeUUID(out, id);
+                }
+                out.writeInt(override.transmit().size());
+                for (UUID id : override.transmit()) {
+                    writeUUID(out, id);
+                }
             }
         }));
 
